@@ -1,0 +1,4 @@
+xmltodict
+dataclasses
+numpy
+#scipy
