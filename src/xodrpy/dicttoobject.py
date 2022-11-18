@@ -24,6 +24,7 @@
 
 import os
 from collections import UserDict
+from typing import Callable, Dict, Any
 
 
 SCRIPT_DIR = os.path.dirname( os.path.abspath(__file__) )
@@ -122,26 +123,21 @@ class BaseElement( UserDict ):
 
 
 ##
-class ClassLookup():
+class ConverterLookup():
 
     def __init__(self):
         pass
 
-#     def lookupType(self, curr_path ):
-    def lookupType(self, _ ):
+    # def lookupConverter(self, curr_path ) -> Callable[ [Dict], Any ]:
+    def lookupConverter(self, _ ) -> Callable[ [Dict], Any ]:
         return None
 
-    def lookup(self, curr_path ) -> BaseElement:
-        found_type = self.lookupType( curr_path )           # pylint: disable=assignment-from-none
-        if found_type is None:
-            return None
-        return found_type()                                 # pylint: disable=not-callable
 
 
 ## ====================================================
 
 
-def convert( data_dict, lookup_object: ClassLookup = None ):
+def convert( data_dict, lookup_object: ConverterLookup = None ):
     if lookup_object is None:
         return
     converter = ConvertTraverser( lookup_object )
@@ -149,24 +145,51 @@ def convert( data_dict, lookup_object: ClassLookup = None ):
 
 
 ##
-class DictLookup( ClassLookup ):
+class BaseElementConverter():
+
+    def __init__(self, class_type ):
+        self.class_type = class_type
+
+    def __call__(self, data_value) -> BaseElement:
+        if self.class_type is None:
+            return None
+        target: BaseElement = self.class_type()
+        target.initialize( data_value )
+        return target
+
+
+##
+class DictLookup( ConverterLookup ):
 
     def __init__(self):
         super().__init__()
         ##self.builder = DictBuilder()
-        self.class_list = []
+        self.convert_list = []
 
-    def addClass( self, path, value ):
-        ##self.builder.addPath( path, value)
-        self.class_list.append( ( tuple(path), value ) )
+    def addClass( self, path, class_type ):
+        if class_type is None:
+            return
+        converter = BaseElementConverter( class_type )
+        self.convert_list.append( ( tuple(path), converter ) )
+    
+    def addConverter( self, path, converter ):
+        self.convert_list.append( ( tuple(path), converter ) )
 
     def lookupType(self, curr_path ):
+        converter: Callable[ [Dict], Any ] = self.lookupConverter( curr_path )
+        if converter is None:
+            return None
+        if isinstance( converter, BaseElementConverter ):
+            return converter.class_type
+        return converter
+
+    def lookupConverter(self, curr_path ) -> Callable[ [Dict], Any ]:
         if isinstance( curr_path, tuple ) is False:
             path = tuple( curr_path )
             return self._get( path )
         return self._get( curr_path )
 
-    def _get(self, curr_path):
+    def _get(self, curr_path) -> Callable[ [Dict], Any ]:
 #         factory_dict = self.builder.data_dict
 #         ## print( "a:", factory_dict, "b:", curr_path, "c:", None )
 #         target_type = get_by_path( factory_dict, curr_path, None )
@@ -180,9 +203,9 @@ class DictLookup( ClassLookup ):
 ##
 class ConvertTraverser( DictTraverser ):
 
-    def __init__(self, lookup: ClassLookup = None):
+    def __init__(self, lookup: ConverterLookup = None):
         super().__init__()
-        self.lookup: ClassLookup = lookup
+        self.lookup: ConverterLookup = lookup
 
     def convert( self, data_dict: dict ):
         self.traverse( data_dict )
@@ -190,11 +213,11 @@ class ConvertTraverser( DictTraverser ):
     def _traversePost( self, data_container, data_key, data_value ):
         if self.lookup is None:
             return
-        target: BaseElement = self.lookup.lookup( self.curr_path )
-        if target is None:
+        converter: Callable[ [Dict], Any ] = self.lookup.lookupConverter( self.curr_path )
+        if converter is None:
             return
-        target.initialize( data_value )
-        data_container[ data_key ] = target
+        result = converter( data_value )
+        data_container[ data_key ] = result
 
 
 ##
