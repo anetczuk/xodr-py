@@ -123,21 +123,17 @@ class ModuleTest(unittest.TestCase):
 
         self.assertEqual( "[{'obj1': {'attr1': 'val1'}}, {'obj2': {'attr1': 'val1'}}]", str( data_dict ) )
 
-#     def test_convert_01(self):
-#         builder = DictBuilder()
-#         builder.addPath( ["obj3", "obj1", "attr1"], "val1" )
-#         builder.addPath( ["obj3", "obj2", "attr1"], "val2" )
-#         data_dict = builder.getData()
-#
-#         lookup = DictLookup()
-#         lookup.addClass( ["obj3"], None )
-#         lookup.addClass( ["obj3", "obj1"], None )
-#         convert( data_dict, lookup )
-#
-#         self.assertEqual( "{'obj1': {'attr1': 10}}", str( data_dict ) )
-#         self.assertEqual( dict, type( data_dict ) )
-#         self.assertEqual( dict, type( data_dict['obj1'] ) )
-#         self.assertEqual( int, type( data_dict['obj1']['attr1'] ) )
+    def test_convert_subpath(self):
+        builder = DictBuilder()
+        builder.addPath( ["obj3", "obj1", "attr1"], "10" )
+        builder.addPath( ["obj3", "obj2", "attr1"], "val2" )
+        data_dict = builder.getData()
+
+        lookup = DictLookup()
+        lookup.addConverter( ["obj1", "attr1"], int )
+        convert( data_dict, lookup )
+
+        self.assertEqual( 10, data_dict["obj3"]["obj1"]["attr1"] )
 
 
 ### ======================================================================
@@ -162,6 +158,20 @@ class DictLookupTest(unittest.TestCase):
 
         found_type = lookup.lookupType( ["obj3", "obj1"] )
         self.assertEqual( str, found_type )
+
+    def test_lookupConverter_subpath_01(self):
+        lookup = DictLookup()
+        lookup.addConverter( ["obj1", "attr1"], int )
+
+        found_type = lookup.lookupConverter( ["obj1"] )
+        self.assertEqual( None, found_type )
+
+    def test_lookupConverter_subpath_02(self):
+        lookup = DictLookup()
+        lookup.addConverter( ["obj1", "attr1"], int )
+
+        found_type = lookup.lookupConverter( ["obj2", "obj1", "attr1"] )
+        self.assertEqual( int, found_type )
 
 
 ### ======================================================================

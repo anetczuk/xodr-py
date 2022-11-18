@@ -67,6 +67,10 @@ class OpenDRIVE( BaseElement ):
             return "unknown"
         return version
 
+    def roadsNumber(self):
+        roads_list = self.get("road")
+        return len( roads_list )
+
     def roadById(self, road_id: str ):
         roads_list = self.get("road")
         for road in roads_list:

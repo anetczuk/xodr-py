@@ -133,7 +133,6 @@ class ConverterLookup():
         return None
 
 
-
 ## ====================================================
 
 
@@ -194,10 +193,32 @@ class DictLookup( ConverterLookup ):
 #         ## print( "a:", factory_dict, "b:", curr_path, "c:", None )
 #         target_type = get_by_path( factory_dict, curr_path, None )
 
-        for pair in self.class_list:
+        ## check exact
+        for pair in self.convert_list:
             if pair[0] == curr_path:
                 return pair[1]
+
+        ## check subpath
+        for pair in self.convert_list:
+            if is_matching( pair[0], curr_path ):
+                return pair[1]
         return None
+
+
+##
+def is_matching( type_path, search_path ):
+    type_len    = len( type_path )
+    search_len  = len( search_path )
+    search_diff = search_len - type_len
+    if search_diff < 0:
+        return False
+    if type_len == search_len:
+        return type_path == search_path
+    for i in range( search_diff + 1, 0, -1 ):
+        sub_type = search_path[ i: i + search_len ]
+        if sub_type == type_path:
+            return True
+    return False
 
 
 ##
