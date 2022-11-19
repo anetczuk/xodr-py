@@ -108,15 +108,10 @@ class BaseElement( UserDict ):
     def initialize( self, data: dict ):
         if isinstance( data, dict ):
             self.extend( data )
-        self._init()
 
     def extend( self, data_dict: dict ):
         for key, val in data_dict.items():
             self[ key ] = val
-
-    ## post deserialize init stage
-    def _init(self):
-        pass
 
     def attr( self, name ):
         return self.get( "@" + name )
@@ -171,7 +166,7 @@ class DictLookup( ConverterLookup ):
         converter = BaseElementConverter( class_type )
         self.convert_list.append( ( tuple(path), converter ) )
     
-    def addConverter( self, path, converter ):
+    def addConverter( self, path, converter: Callable[ [Dict], Any ] ):
         self.convert_list.append( ( tuple(path), converter ) )
 
     def lookupType(self, curr_path ):
