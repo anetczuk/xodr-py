@@ -19,4 +19,7 @@ for xodr_file in $SCRIPT_DIR/samples/*.xodr; do     ## whitespace-safe but not r
     $TOOL_SRC_DIR/xodrpy/draw.py --xodr "$xodr_file" --outsvg "$SVG_PATH"
     convert -density 200 -flip "$SVG_PATH" "$PNG_PATH"
     #convert -density 400 -flip "$SVG_PATH" "$PNG_PATH"
+    
+    ## remove metadata
+    mogrify -strip "$PNG_PATH"
 done

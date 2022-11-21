@@ -16,3 +16,6 @@ $TOOL_SRC_DIR/xodrpy/draw.py --xodr "$XODR_PATH" --outsvg "$SCRIPT_DIR/draw/town
 
 
 convert -density 400 -flip "$SCRIPT_DIR/draw/town1.svg" "$SCRIPT_DIR/draw/town1.png"
+
+## remove metadata
+mogify -strip "$SCRIPT_DIR/draw/town1.png"
