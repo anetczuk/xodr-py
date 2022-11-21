@@ -2,3 +2,5 @@ xmltodict
 dataclasses
 numpy
 #scipy
+
+svgwrite
