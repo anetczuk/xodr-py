@@ -29,6 +29,7 @@ import os
 import logging
 from dataclasses import dataclass
 
+import math
 import numpy as np
 # import scipy.spatial.transform as trans
 
@@ -45,6 +46,9 @@ SCRIPT_DIR = os.path.dirname( os.path.abspath(__file__) )
 class Vector2D():
     x: float
     y: float
+    
+    def __len__(self):
+        return 2
 
     def __getitem__(self, index):
         if index == 0:
@@ -53,8 +57,33 @@ class Vector2D():
             return self.y
         raise IndexError( f"invalid index: {index}" )
 
+    def __neg__(self):
+        return Vector2D( -self.x, -self.y )
+
+    def __abs__(self):
+        """ Length of vector (required for unit testing). """
+        return math.sqrt( self.x * self.x + self.y * self.y )
+
     def __add__(self, U):
-        return Vector2D( self.x + U.x, self.y + U.y )
+        return Vector2D( self.x + U[0], self.y + U[1] )
+
+    def __sub__(self, U):
+        return Vector2D( self.x - U[0], self.y - U[1] )
+
+    def tuple( self, offset=(0,0) ):
+        return ( self.x + offset[0], self.y + offset[1] )
+
+    def rotate90(self):
+        tmp_x  = self.x
+        tmp_y  = self.y
+        self.x = -tmp_y
+        self.y =  tmp_x
+
+    def rotate_90(self):
+        tmp_x  = self.x
+        tmp_y  = self.y
+        self.x =  tmp_y
+        self.y = -tmp_x
 
     def rotateXY( self, angle_rad ):
         # angle_rad = -angle_rad              ## rotate counter-clockwise direction
@@ -83,30 +112,39 @@ class Vector3D():
 ## =============================================================
 
 
+def move_strip( strip, offset ):
+    s_size = len( strip )
+    for i in range( 0, s_size ):
+        strip[ i ] = strip[ i ] + offset
+
+
+## =============================================================
+
+
 def get_min_point( pointA: tuple, pointB: tuple ):
-    return [  get_min_val( pointA[0], pointB[0] ),
+    return (  get_min_val( pointA[0], pointB[0] ),
               get_min_val( pointA[1], pointB[1] ),
               get_min_val( pointA[2], pointB[2] )
-              ]
+              )
 
 
 def get_max_point( pointA: tuple, pointB: tuple ):
-    return [  get_max_val( pointA[0], pointB[0] ),
+    return (  get_max_val( pointA[0], pointB[0] ),
               get_max_val( pointA[1], pointB[1] ),
               get_max_val( pointA[2], pointB[2] )
-              ]
+              )
 
 
 def get_min_point2d( pointA: tuple, pointB: tuple ):
-    return [  get_min_val( pointA[0], pointB[0] ),
+    return (  get_min_val( pointA[0], pointB[0] ),
               get_min_val( pointA[1], pointB[1] )
-              ]
+              )
 
 
 def get_max_point2d( pointA: tuple, pointB: tuple ):
-    return [  get_max_val( pointA[0], pointB[0] ),
+    return (  get_max_val( pointA[0], pointB[0] ),
               get_max_val( pointA[1], pointB[1] )
-              ]
+              )
 
 
 ## ================================================================

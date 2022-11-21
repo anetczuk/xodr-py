@@ -24,6 +24,7 @@
 
 import os
 import abc
+import logging
 from typing import List
 import xmltodict
 
@@ -34,6 +35,8 @@ from xodrpy.dicttoobject import convert,\
 
 from xodrpy.types import *
 
+
+_LOGGER = logging.getLogger(__name__)
 
 SCRIPT_DIR = os.path.dirname( os.path.abspath(__file__) )
 
@@ -77,6 +80,7 @@ def convert_to_Road( data_dict: dict ):
     obj = Road()
     obj.initialize( data_dict )
 
+    # _LOGGER.info( "converting Road %s", obj.id() )
     planView = obj.get( "planView" )
     geoms_list = ensure_list( planView, "geometry" )
 
@@ -86,7 +90,10 @@ def convert_to_Road( data_dict: dict ):
         new_list.append( derived )
     planView[ "geometry" ] = new_list
 
-    elevationProfile = obj.get( "elevationProfile" )
+    elevationProfile = ensure_dict( obj.data, "elevationProfile" )
+    # elevationProfile = obj.get( "elevationProfile", None )
+    
+    # _LOGGER.info( "converting Road %s %s", obj.id(), elevationProfile )
     ensure_list( elevationProfile, "elevation" )
     return obj
 
@@ -119,8 +126,24 @@ def convert_base( data_dict: dict, target_object: BaseElement ):
 
 
 ##
+def ensure_dict( data_dict, data_key ):
+    value_dict = data_dict.get( data_key, None )
+    if value_dict is None:
+        value_dict = {}
+        data_dict[ data_key ] = value_dict
+        return value_dict
+    if isinstance( value_dict, dict ) is False:
+        raise RuntimeError( "invalid case" )
+    return value_dict
+
+
+##
 def ensure_list( data_dict, data_key ):
-    value_list = data_dict.get( data_key )
+    value_list = data_dict.get( data_key, None )
+    if value_list is None:
+        value_list = []
+        data_dict[ data_key ] = value_list
+        return value_list
     if isinstance( value_list, list ) is False:
         value_list = [ value_list ]
         data_dict[ data_key ] = value_list
