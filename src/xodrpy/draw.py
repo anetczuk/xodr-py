@@ -37,7 +37,7 @@ if __name__ == '__main__':
     sys.path[0] = os.path.join( SCRIPT_DIR, os.pardir )
 
 
-import pprint
+# import pprint
 import svgwrite
 
 from xodrpy.utils import move_strip
@@ -50,7 +50,7 @@ _LOGGER = logging.getLogger(__name__)
 ## ===========================================================
 
 
-def draw_data( opendrive: OpenDRIVE, outsvg_path=None ) -> OpenDRIVE:
+def draw_data( opendrive: OpenDRIVE, outsvg_path=None ):
 #     width   = "100%"
 #     height  = "100%"
 #     min_pos = (0, 0)
@@ -65,6 +65,15 @@ def draw_data( opendrive: OpenDRIVE, outsvg_path=None ) -> OpenDRIVE:
     
     drawer = svgwrite.Drawing( outsvg_path, size=(width, height), profile='tiny' )
 
+    draw_svg( drawer, opendrive, min_pos, "red" )
+
+    drawer.save( pretty=True )
+
+
+def draw_svg( drawer, opendrive: OpenDRIVE, move_offset=None, line_color="red" ):
+    if move_offset is None:
+        move_offset = (0.0, 0.0)
+
 #     road = opendrive.roadById( "508" )
 #     if road is not None:
     roads_list: List[ Road ] = opendrive.roads()
@@ -77,14 +86,12 @@ def draw_data( opendrive: OpenDRIVE, outsvg_path=None ) -> OpenDRIVE:
 #                 continue
             line_strip = geom.lineApprox( 1.0 )
 #             pprint.pprint( line_strip )
-            move_strip( line_strip, min_pos )
+            move_strip( line_strip, move_offset )
             params = { "stroke": 'red',
                        "fill": "none"
                        }
             new_line = drawer.polyline( line_strip, **params )
             drawer.add( new_line )
-
-    drawer.save( pretty=True )
 
 
 ## ===========================================================
