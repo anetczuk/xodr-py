@@ -1,4 +1,4 @@
-# XODR for Python
+# XODR with logic for Python
 
 Set of classes facilitating processing of XODR files and data structure described by OpenDRIVE 
 standard.
