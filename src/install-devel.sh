@@ -1,5 +1,9 @@
 #!/bin/bash
 
+##
+## Script installs package in "editable" mode (symlinks) into Python's user directory.
+##
+
 set -eu
 
 ## works both under bash and sh

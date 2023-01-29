@@ -1,5 +1,9 @@
 #!/bin/bash
 
+##
+## Script installs copy of package into Python's user directory.
+##
+
 set -eu
 
 ## works both under bash and sh
