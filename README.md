@@ -3,6 +3,7 @@
 Set of classes facilitating processing of XODR files and data structure described by OpenDRIVE 
 standard.
 
+Moreover package allows to parse *RoadRunner*'s metadata file containing configuration for signalization (e.g. traffic lights).
 
 ## References
 

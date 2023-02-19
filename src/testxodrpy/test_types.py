@@ -24,7 +24,8 @@
 import unittest
 from testxodrpy import get_data_path
 
-from xodrpy.utils import Vector2D
+import math
+from xodrpy.utils import Vector2D, Vector3D
 from xodrpy.types import OpenDRIVE, Road, LineGeometry, ArcGeometry,\
     ClothoidGeometry
 from xodrpy.xodr import load
@@ -118,6 +119,28 @@ class ArcGeometryTest(unittest.TestCase):
         position_end = geom.positionByOffset( 1.57079632679 )
         self.assertAlmostEqual( Vector2D(x=-1.0, y=1.0), position_end )
 
+    def test_heading_positive(self):
+        ## full circle with radius 1.0
+        data_dict = { "@s": "0.0", "@x": "0.0", "@y": "0.0", "@hdg": math.pi / 2.0, "@length": 2.0 * math.pi, "@curvature": 1.0 }
+        geom = ArcGeometry.create( data_dict )
+        
+        heading = geom.headingByOffsetRaw( 0.0 )
+        self.assertEqual( math.pi / 2.0, heading )
+
+        heading = geom.headingByOffsetRaw( math.pi / 2.0 )
+        self.assertEqual( math.pi, heading )
+
+    def test_heading_negative(self):
+        ## full circle with radius 1.0
+        data_dict = { "@s": "0.0", "@x": "0.0", "@y": "0.0", "@hdg": math.pi / 2.0, "@length": 2.0 * math.pi, "@curvature": -1.0 }
+        geom = ArcGeometry.create( data_dict )
+        
+        heading = geom.headingByOffsetRaw( 0.0 )
+        self.assertEqual( math.pi / 2.0, heading )
+
+        heading = geom.headingByOffsetRaw( math.pi / 2.0 )
+        self.assertEqual( 0.0, heading )
+
     def test_boundingBox(self):
         data_dict = { "@s": "0.0", "@x": "0.0", "@y": "0.0", "@hdg": "0.0", "@length": "5.0", "@curvature": 1.0 }
         geom = ArcGeometry.create( data_dict )
@@ -190,6 +213,19 @@ class RoadTest(unittest.TestCase):
 
         elevation_value = road.elevationValue( 10.0 )
         self.assertEqual( 0.0, elevation_value )
+
+    def test_position(self):
+        input_path = get_data_path( "town1_road1_simple.xodr" )
+        opendrive: OpenDRIVE = load( input_path )
+        self.assertTrue( opendrive is not None )
+        road: Road = opendrive.roadById("0")
+        self.assertTrue( road is not None )
+        
+        possition = road.position( 0.0, 0.0, 0.0 )
+        self.assertEqual( Vector3D(10.0, 10.0, 0.0), possition )
+        
+        possition = road.position( 5.0, 2.0, 1.0 )
+        self.assertEqual( Vector3D(15.0, 12.0, 1.0), possition )
 
     def test_boundingBox_simple(self):
         input_path = get_data_path( "town1_road1_simple.xodr" )

@@ -160,12 +160,16 @@ class DictLookup( ConverterLookup ):
         ##self.builder = DictBuilder()
         self.convert_list = []
 
+    ## convert dict element to class object
+    ## use method to simply create object attributes from dict elements
+    ## without additional convertion
     def addClass( self, path, class_type ):
         if class_type is None:
             return
         converter = BaseElementConverter( class_type )
         self.convert_list.append( ( tuple(path), converter ) )
     
+    ## general method converting dict to object
     def addConverter( self, path, converter: Callable[ [Dict], Any ] ):
         self.convert_list.append( ( tuple(path), converter ) )
 
@@ -375,3 +379,42 @@ def get_by_path( data_dict, keys_list, default_value=None ):
     sub_data = data_dict.get( key, default_value )
     sub_list = keys_list[ 1: ]
     return get_by_path( sub_data, sub_list, default_value )
+
+
+## ====================================================
+
+
+def convert_to_list( data_dict: dict, data_key ):
+    ensure_list( data_dict, data_key )
+    return data_dict
+
+
+##
+def convert_base( data_dict: dict, target_object: BaseElement ):
+    target_object.initialize( data_dict )
+    return target_object
+
+
+##
+def ensure_dict( data_dict, data_key ):
+    value_dict = data_dict.get( data_key, None )
+    if value_dict is None:
+        value_dict = {}
+        data_dict[ data_key ] = value_dict
+        return value_dict
+    if isinstance( value_dict, dict ) is False:
+        raise RuntimeError( "invalid case" )
+    return value_dict
+
+
+##
+def ensure_list( data_dict, data_key ):
+    value_list = data_dict.get( data_key, None )
+    if value_list is None:
+        value_list = []
+        data_dict[ data_key ] = value_list
+        return value_list
+    if isinstance( value_list, list ) is False:
+        value_list = [ value_list ]
+        data_dict[ data_key ] = value_list
+    return value_list

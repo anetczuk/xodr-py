@@ -30,7 +30,7 @@ import math
 import numpy as np
 
 from xodrpy.utils import get_min_point2d, get_max_point2d, get_min_point,\
-    get_max_point, Vector2D
+    get_max_point, Vector2D, Vector3D
 from xodrpy.dicttoobject import convert,\
     DictLookup, BaseElement
 from xodrpy.OdrSpiral import OdrSpiral
@@ -94,6 +94,92 @@ class OpenDRIVE( BaseElement ):
         return ( (min_pos[0] - margin, min_pos[1] - margin, min_pos[2] - margin), 
                  (max_pos[0] + margin, max_pos[1] + margin, max_pos[2] + margin) )
 
+    def signalIDList(self):
+        road_list = self.roads()
+        signal_ids = set()
+        for road in road_list:
+            ## pprint.pprint( road )
+            signals = road.get( "signals", None )
+            if signals is None:
+                continue
+            sig_list = signals.get( "signal", [] )
+            for sig in sig_list:
+                sig_id = sig.get( "@id", None )
+                if sig_id is None:
+                    continue
+                signal_ids.add( sig_id )
+
+            ## signalReference does not have own ID - attribute 'id' points to proper signal
+
+        return signal_ids
+
+    def signalUUIDList(self):
+        road_list = self.roads()
+        signal_ids = set()
+        for road in road_list:
+            ## pprint.pprint( road )
+            signals = road.get( "signals", None )
+            if signals is None:
+                continue
+
+            sig_list = []
+            sig_list.extend( signals.get( "signal", [] ) )
+            ## sig_list.extend( signals.get( "signalReference", [] ) )
+            
+            for sig in sig_list:
+                user_data = sig.get( "userData", None )
+                if user_data is None:
+                    continue
+                signal_meta = user_data.get( "vectorSignal", None )
+                if signal_meta is None:
+                    continue
+                sig_id = signal_meta[ "@signalId" ]
+                signal_ids.add( sig_id )
+
+        return signal_ids
+
+    def signalGateUUIDList(self):
+        road_list = self.roads()
+        signal_ids = set()
+        for road in road_list:
+            ## pprint.pprint( road )
+            signals = road.get( "signals", None )
+            if signals is None:
+                continue
+
+            sig_list = []
+            ## sig_list.extend( signals.get( "signal", [] ) )
+            sig_list.extend( signals.get( "signalReference", [] ) )
+
+            for sig in sig_list:
+                user_data = sig.get( "userData", None )
+                if user_data is None:
+                    continue
+                signal_meta = user_data.get( "vectorSignal", None )
+                if signal_meta is None:
+                    continue
+                sig_id = signal_meta[ "@gateId" ]
+                signal_ids.add( sig_id )
+
+        return signal_ids
+
+    def signalById(self, signal_id):
+        road_list = self.roads()
+        for road in road_list:
+            ## pprint.pprint( road )
+            signals = road.get( "signals", None )
+            if signals is None:
+                continue
+            sig_list = signals.get( "signal", [] )
+            for sig in sig_list:
+                sig_id = sig.get( "@id", None )
+                if sig_id == signal_id:
+                    return sig
+
+            ## signalReference does not have own ID - attribute 'id' points to proper signal
+
+        return None
+
 
 ## ================================================================
 
@@ -151,12 +237,26 @@ class GeometryBase( BaseElement ):
         yval = float( self.attr( "y" ) )
         return Vector2D( xval, yval )
 
-    def positionByOffset( self, value_offset ):
-        raw_offset = value_offset - self.offset()
-        return self.positionByOffsetRaw( raw_offset )
+    def positionByOffset( self, offset_on_road, t_coord=0.0 ) -> Vector2D:
+        raw_offset = offset_on_road - self.offset()
+        position = self.positionByOffsetRaw( raw_offset )
+        heading  = self.headingByOffsetRaw( raw_offset )
+        heading_vec = Vector2D( t_coord, 0.0 )
+        heading_vec.rotate90()                      ## orthogonal
+        heading_vec.rotateXY( heading )
+        return position + heading_vec
 
     @abc.abstractmethod
-    def positionByOffsetRaw( self, value_offset ):
+    def positionByOffsetRaw( self, value_offset ) -> Vector2D:
+        raise NotImplementedError('You need to define this method in derived class!')
+
+    def headingByOffset( self, offset_on_road ) -> Vector2D:
+        raw_offset = offset_on_road - self.offset()
+        return self.headingByOffsetRaw( raw_offset )
+
+    @abc.abstractmethod
+    def headingByOffsetRaw( self, value_offset ) -> float:
+        """ returns value in radians """
         raise NotImplementedError('You need to define this method in derived class!')
 
     def boundingBox(self):
@@ -195,6 +295,9 @@ class LineGeometry( GeometryBase ):
         heading_vec = Vector2D( value_offset, 0.0 )
         heading_vec.rotateXY( heading )
         return start_point + heading_vec
+
+    def headingByOffsetRaw( self, value_offset ) -> float:
+        return self.hdg()
 
     def boundingBox(self):
         min_pos = (None, None)
@@ -244,7 +347,7 @@ class ArcGeometry( GeometryBase ):
         radius_vec  = self.radiusVector()
         return start_point - radius_vec
 
-    def radiusVector( self, geom_offset=0.0 ):
+    def radiusVector( self, geom_offset=0.0 ) -> Vector2D:
         """ Vector from center point to point on arc. """
         curv = self.curvature()
         if abs( curv ) < 0.00001:
@@ -269,6 +372,14 @@ class ArcGeometry( GeometryBase ):
         center_point = self.centerPoint()
         radius_vec   = self.radiusVector( value_offset )
         return center_point + radius_vec
+
+    def headingByOffsetRaw( self, value_offset ) -> float:
+        curv = self.curvature()
+        if abs( curv ) < 0.00001:
+            ## line
+            return self.hdg()
+        radius = 1.0 / curv
+        return value_offset / radius + self.hdg()
 
 
     @staticmethod
@@ -330,6 +441,9 @@ class ClothoidGeometry( GeometryBase ):
         spiral_point.rotateXY( heading - ref_hdg )
         return start_point + spiral_point
 
+    def headingByOffsetRaw( self, value_offset ) -> float:
+        raise NotImplementedError('You need to define this method in derived class!')
+
 
 ## ================================================================
 
@@ -354,26 +468,28 @@ class Road( BaseElement ):
         geoms = self.geometries()
         return geoms[ geom_index ]
 
+    def geometryByOffset(self, offset_on_road) -> GeometryBase:
+        geoms = self.geometries()
+        return get_item_by_offset( geoms, offset_on_road )
+
     def elevationByOffset(self, offset_on_road) -> Polynomial3:
         elevation_profile = self.get( "elevationProfile" )
         elevation_list    = elevation_profile.get( "elevation" )
-        e_size = len( elevation_list )
-        if e_size < 1:
-            return None
-        for i in range( 0, e_size ):
-            elevation = elevation_list[i]
-            elevation_offset = elevation.offset()
-            if elevation_offset > offset_on_road:
-                if i < 1:
-                    return elevation
-                return elevation_list[ i - 1 ]
-        return elevation_list[ -1 ]
+        return get_item_by_offset( elevation_list, offset_on_road )
 
     def elevationValue(self, offset_on_road):
         elevation: Polynomial3 = self.elevationByOffset( offset_on_road )
         if elevation is None:
             return 0.0
         return elevation.value( offset_on_road )
+
+    def position( self, s_coord, t_coord, z_coord ) -> Vector3D:
+        geom = self.geometryByOffset( s_coord )
+        if not geom:
+            return None
+        geom_pos: Vector2D = geom.positionByOffset( s_coord, t_coord )    
+        elevation = self.elevationValue( s_coord ) + z_coord
+        return Vector3D( geom_pos.x, geom_pos.y, elevation )
 
     def boundingBox(self):
         min_pos = (None, None)
@@ -397,12 +513,50 @@ class Road( BaseElement ):
         min_z   = min( start_z, end_z )
         max_z   = max( start_z, end_z )
         return ( (min_pos[0], min_pos[1], min_z), (max_pos[0], max_pos[1], max_z) )
+    
+    def signalsList(self):
+        sigs_dict = self.get("signals")
+        if not sigs_dict:
+            return []
+        sigs_list = sigs_dict.get("signal")
+        if not sigs_list:
+            return []
+        return sigs_list
 
 
-##
-def ensure_list( data_dict, data_key ):
-    value_list = data_dict.get( data_key )
-    if isinstance( value_list, list ) is False:
-        value_list = [ value_list ]
-        data_dict[ data_key ] = value_list
-    return value_list
+## return item from list by 'offset_value'
+## list item have to have 'offset()' member
+def get_item_by_offset( item_list, offset_value ):
+    list_size = len( item_list )
+    if list_size < 1:
+        return None
+    for i in range( 0, list_size ):
+        item = item_list[i]
+        item_offset = item.offset()
+        if item_offset > offset_value:
+            if i < 1:
+                return item
+            return item_list[ i - 1 ]
+    return item_list[ -1 ]
+
+
+## ================================================================
+
+
+class RoadSignal( BaseElement ):
+
+    def __init__(self):
+        super().__init__()
+        self.road = None        ## road owning the signal
+
+    def id(self):
+        return self.attr("id")
+
+    def position(self):
+        s_coord = float( self.attr("s") )
+        t_coord = float( self.attr("t") )
+        z_coord = float( self.attr("zOffset") )
+        return self.road.position( s_coord, t_coord, z_coord )
+
+    def heading(self):
+        return self.attr( "hOffset" )

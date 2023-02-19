@@ -27,11 +27,12 @@ import abc
 import logging
 from typing import List
 import xmltodict
+import pprint
 
 from xodrpy.utils import get_min_point2d, get_max_point2d, get_min_point,\
     get_max_point, Vector2D
 from xodrpy.dicttoobject import convert,\
-    DictLookup, BaseElement
+    DictLookup, BaseElement, ensure_dict, ensure_list, convert_to_list
 
 from xodrpy.types import *
 
@@ -55,11 +56,13 @@ def load( xodr_path ) -> OpenDRIVE:
 
         lookup = DictLookup()
         lookup.addConverter( ["OpenDRIVE"], convert_to_OpenDRIVE )
-        lookup.addConverter( ["OpenDRIVE", "road"], convert_to_Road )
         lookup.addClass( ["OpenDRIVE", "road", "planView", "geometry", "line"], LineGeometry )
         lookup.addClass( ["OpenDRIVE", "road", "planView", "geometry", "arc"], ArcGeometry )
         lookup.addClass( ["OpenDRIVE", "road", "planView", "geometry", "spiral"], ClothoidGeometry )
         lookup.addClass( ["OpenDRIVE", "road", "elevationProfile", "elevation"], Polynomial3 )
+        lookup.addClass( ["OpenDRIVE", "road", "signals", "signal"], RoadSignal )
+        lookup.addConverter( ["OpenDRIVE", "road"], convert_to_Road )
+
         convert( data_dict, lookup )
 
         return data_dict[ "OpenDRIVE" ]
@@ -68,7 +71,7 @@ def load( xodr_path ) -> OpenDRIVE:
 ## ===========================================================
 
 
-def convert_to_OpenDRIVE( data_dict: dict ):
+def convert_to_OpenDRIVE( data_dict: dict ) -> OpenDRIVE:
     obj = OpenDRIVE()
     obj.initialize( data_dict )
 
@@ -76,7 +79,7 @@ def convert_to_OpenDRIVE( data_dict: dict ):
     return obj
 
 
-def convert_to_Road( data_dict: dict ):
+def convert_to_Road( data_dict: dict ) -> Road:
     obj = Road()
     obj.initialize( data_dict )
 
@@ -95,10 +98,20 @@ def convert_to_Road( data_dict: dict ):
     
     # _LOGGER.info( "converting Road %s %s", obj.id(), elevationProfile )
     ensure_list( elevationProfile, "elevation" )
+
+    signals = obj.get( "signals", None )
+    if signals:
+        ensure_list( signals, "signal" )
+        ensure_list( signals, "signalReference" )
+
+    sigs_list = obj.signalsList()
+    for sig in sigs_list:
+        sig.road = obj
+
     return obj
 
 
-def convert_geometry( geom: dict ):
+def convert_geometry( geom: dict ) -> GeometryBase:
     if isinstance(geom, str):
         pass
     line: GeometryBase = geom.get( "line" )
@@ -118,33 +131,3 @@ def convert_geometry( geom: dict ):
         return spiral
 
     raise RuntimeError( f"unhandled geometry: {geom}" )
-
-
-def convert_base( data_dict: dict, target_object: BaseElement ):
-    target_object.initialize( data_dict )
-    return target_object
-
-
-##
-def ensure_dict( data_dict, data_key ):
-    value_dict = data_dict.get( data_key, None )
-    if value_dict is None:
-        value_dict = {}
-        data_dict[ data_key ] = value_dict
-        return value_dict
-    if isinstance( value_dict, dict ) is False:
-        raise RuntimeError( "invalid case" )
-    return value_dict
-
-
-##
-def ensure_list( data_dict, data_key ):
-    value_list = data_dict.get( data_key, None )
-    if value_list is None:
-        value_list = []
-        data_dict[ data_key ] = value_list
-        return value_list
-    if isinstance( value_list, list ) is False:
-        value_list = [ value_list ]
-        data_dict[ data_key ] = value_list
-    return value_list
