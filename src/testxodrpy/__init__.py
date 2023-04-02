@@ -26,9 +26,10 @@ import os
 
 
 MODULE_DIR = os.path.dirname( os.path.abspath(__file__) )
+SRC_DIR    = os.path.abspath( os.path.join( MODULE_DIR, os.pardir ) )
 
-#### append source root
-sys.path.append(os.path.abspath( os.path.join( MODULE_DIR, ".." ) ))
+# #### add as first source root
+sys.path.insert(0, SRC_DIR )
 
 
 DATA_DIR = os.path.join( MODULE_DIR, "data" )
