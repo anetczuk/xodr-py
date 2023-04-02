@@ -647,9 +647,6 @@ class RoadObject( BaseElement ):
         s_coord = float( self.attr("s") )
         t_coord = float( self.attr("t") )
         z_coord = float( self.attr("zOffset") )
-        if self.orientation() == "+":
-        # if t_coord > 0.0:
-            z_coord += 2.0
         return self.road.position( s_coord, t_coord, z_coord )
 
     def headingRaw(self):
