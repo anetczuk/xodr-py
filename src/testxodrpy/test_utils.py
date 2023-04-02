@@ -23,7 +23,7 @@
 
 import unittest
 
-from xodrpy.utils import Vector2D
+from xodrpy.utils import Vector2D, Vector3D
 
 
 ##
@@ -55,3 +55,34 @@ class Vector2DTest(unittest.TestCase):
         vec = Vector2D( 1, 0 )
         vec.rotateXY( -1.57079632679 )
         self.assertAlmostEqual( Vector2D(x=0.0, y=-1.0), vec )
+
+
+##
+class Vector3DTest(unittest.TestCase):
+    def setUp(self):
+        ## Called before testfunction is executed
+        pass
+
+    def tearDown(self):
+        ## Called after testfunction was executed
+        pass
+
+    def test_rotateXY90(self):
+        vec = Vector3D( 1, 1, 1 )
+        vec.rotateXY90()
+        self.assertAlmostEqual( Vector3D(x=-1.0, y=1.0, z=1.0), vec )
+
+    def test_rotateXY_90(self):
+        vec = Vector3D( 1, 1, 1 )
+        vec.rotateXY_90()
+        self.assertAlmostEqual( Vector3D(x=1.0, y=-1.0, z=1.0), vec )
+
+    def test_rotateXY_positive(self):
+        vec = Vector3D( 1, 0, 1 )
+        vec.rotateXY( 1.57079632679 )
+        self.assertAlmostEqual( Vector3D(x=0.0, y=1.0, z=1.0), vec )
+
+    def test_rotateXY_negative(self):
+        vec = Vector3D( 1, 0, 1 )
+        vec.rotateXY( -1.57079632679 )
+        self.assertAlmostEqual( Vector3D(x=0.0, y=-1.0, z=1.0), vec )

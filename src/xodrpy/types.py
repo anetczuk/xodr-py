@@ -28,6 +28,7 @@ from typing import List
 
 import math
 import numpy as np
+import pprint
 
 from xodrpy.utils import get_min_point2d, get_max_point2d, get_min_point,\
     get_max_point, Vector2D, Vector3D
@@ -73,7 +74,7 @@ class OpenDRIVE( BaseElement ):
     def roadsNumber(self):
         return len( self.roads() )
 
-    def roadById(self, road_id: str ):
+    def roadById(self, road_id: str ) -> 'Road':
         roads_list = self.roads()
         for road in roads_list:
             if road.id() == road_id:
@@ -133,8 +134,10 @@ class OpenDRIVE( BaseElement ):
                 signal_meta = user_data.get( "vectorSignal", None )
                 if signal_meta is None:
                     continue
-                sig_id = signal_meta[ "@signalId" ]
-                signal_ids.add( sig_id )
+                sig_uuid = signal_meta.get( "@signalId", None )
+                if sig_uuid is None:
+                    continue
+                signal_ids.add( sig_uuid )
 
         return signal_ids
 
@@ -163,7 +166,7 @@ class OpenDRIVE( BaseElement ):
 
         return signal_ids
 
-    def signalById(self, signal_id):
+    def signalById(self, signal_id) -> 'RoadSignal':
         road_list = self.roads()
         for road in road_list:
             ## pprint.pprint( road )
@@ -178,6 +181,36 @@ class OpenDRIVE( BaseElement ):
 
             ## signalReference does not have own ID - attribute 'id' points to proper signal
 
+        return None
+
+    def objectIDList(self):
+        road_list = self.roads()
+        object_ids = set()
+        for road in road_list:
+            ## pprint.pprint( road )
+            objects = road.get( "objects", None )
+            if objects is None:
+                continue
+            object_list = objects.get( "object", [] )
+            for obj in object_list:
+                obj_id = obj.get( "@id", None )
+                if obj_id is None:
+                    continue
+                object_ids.add( obj_id )
+        return object_ids
+
+    def objectById(self, object_id) -> 'RoadObject':
+        road_list = self.roads()
+        for road in road_list:
+            ## pprint.pprint( road )
+            objects = road.get( "objects", None )
+            if objects is None:
+                continue
+            obj_list = objects.get( "object", [] )
+            for obj in obj_list:
+                obj_id = obj.get( "@id", None )
+                if obj_id == object_id:
+                    return obj
         return None
 
 
@@ -457,6 +490,9 @@ class Road( BaseElement ):
     def id(self):
         return self.attr("id")
 
+    def junctionId(self):
+        return self.attr("junction")
+
     def length(self):
         return float( self.attr("length") )
 
@@ -491,6 +527,12 @@ class Road( BaseElement ):
         elevation = self.elevationValue( s_coord ) + z_coord
         return Vector3D( geom_pos.x, geom_pos.y, elevation )
 
+    def heading(self, s_coord):
+        geom = self.geometryByOffset( s_coord )
+        if not geom:
+            return None
+        return geom.headingByOffset( s_coord )
+
     def boundingBox(self):
         min_pos = (None, None)
         max_pos = (None, None)
@@ -522,6 +564,15 @@ class Road( BaseElement ):
         if not sigs_list:
             return []
         return sigs_list
+    
+    def objectsList(self):
+        obj_dict = self.get("objects")
+        if not obj_dict:
+            return []
+        obj_list = obj_dict.get("object")
+        if not obj_list:
+            return []
+        return obj_list
 
 
 ## return item from list by 'offset_value'
@@ -552,6 +603,15 @@ class RoadSignal( BaseElement ):
     def id(self):
         return self.attr("id")
 
+    def name(self):
+        return self.attr("name")
+
+    def type(self):
+        return self.attr("type")
+
+    def subtype(self):
+        return self.attr("subtype")
+
     def position(self):
         s_coord = float( self.attr("s") )
         t_coord = float( self.attr("t") )
@@ -560,3 +620,75 @@ class RoadSignal( BaseElement ):
 
     def heading(self):
         return self.attr( "hOffset" )
+
+
+## ================================================================
+
+
+class RoadObject( BaseElement ):
+
+    def __init__(self):
+        super().__init__()
+        self.road = None        ## road owning the signal
+
+    def id(self):
+        return self.attr("id")
+
+    def name(self):
+        return self.attr("name")
+
+    def type(self):
+        return self.attr("type")
+
+    def offsetOnRoad(self):
+        return self.attr("s")
+
+    def position(self) -> Vector3D:
+        s_coord = float( self.attr("s") )
+        t_coord = float( self.attr("t") )
+        z_coord = float( self.attr("zOffset") )
+        if self.orientation() == "+":
+        # if t_coord > 0.0:
+            z_coord += 2.0
+        return self.road.position( s_coord, t_coord, z_coord )
+
+    def headingRaw(self):
+        return float( self.attr( "hdg" ) )
+
+    def heading(self):
+        obj_heading = self.headingRaw()
+        s_coord = float( self.attr("s") )
+        road_heading = self.road.heading( s_coord )
+        return obj_heading + road_heading
+
+#         orient_angle = 0.0
+# #         orient_angle -= math.pi * 0.5
+#
+#         orient = self.orientation()
+#         if orient == "-":
+#             orient_angle += math.pi * 0.5
+# #         elif orient == "+":
+# #             orient_angle -= math.pi * 0.5
+#
+# #         t_coord = float( self.attr("t") )
+# #         if t_coord < 0.0:
+# #             orient_angle += math.pi * 0.5
+# #         else:
+# #             orient_angle -= math.pi * 0.5
+#
+#         return obj_heading + road_heading + orient_angle
+#
+# #         s_coord = float( self.attr("s") )
+# #         road_heading = self.road.heading( s_coord )
+# #         obj_heading  = self.headingRaw()
+# #         orient = self.orientation()
+# #         orient_angle = 0.0
+# #         if orient == "-":
+# #             orient_angle -= math.pi * 0.5
+# #         elif orient == "+":
+# #             orient_angle += math.pi * 0.5
+# #         return road_heading + obj_heading - orient_angle
+
+    ## returns "+" or "-"
+    def orientation(self):
+        return self.attr( "orientation" )

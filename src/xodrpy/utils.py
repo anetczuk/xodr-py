@@ -108,6 +108,52 @@ class Vector3D():
     y: float
     z: float
 
+    def __len__(self):
+        return 3
+
+    def __getitem__(self, index):
+        if index == 0:
+            return self.x
+        if index == 1:
+            return self.y
+        if index == 2:
+            return self.z
+        raise IndexError( f"invalid index: {index}" )
+
+    def __neg__(self):
+        return Vector3D( -self.x, -self.y, -self.z )
+
+    def __abs__(self):
+        """ Length of vector (required for unit testing). """
+        return math.sqrt( self.x * self.x + self.y * self.y + self.z * self.z )
+
+    def __add__(self, other):
+        return Vector3D( self.x + other.x, self.y + other.y, self.z + other.z )
+
+    def __sub__(self, other):
+        return Vector3D( self.x - other.x, self.y - other.y, self.z - other.z )
+
+    def rotateXY90(self):
+        tmp_x  = self.x
+        tmp_y  = self.y
+        self.x = -tmp_y
+        self.y =  tmp_x
+
+    def rotateXY_90(self):
+        tmp_x  = self.x
+        tmp_y  = self.y
+        self.x =  tmp_y
+        self.y = -tmp_x
+
+    def rotateXY( self, angle_rad ):
+        # angle_rad = -angle_rad              ## rotate counter-clockwise direction
+        vec = [ self.x, self.y ]
+        cos_val, sin_val = np.cos(angle_rad), np.sin(angle_rad)
+        rot = np.array([ [cos_val, -sin_val], [sin_val, cos_val] ])
+        rotated = np.dot( rot, vec )
+        self.x = rotated[0]
+        self.y = rotated[1]
+
 
 ## =============================================================
 
@@ -116,6 +162,12 @@ def move_strip( strip, offset ):
     s_size = len( strip )
     for i in range( 0, s_size ):
         strip[ i ] = strip[ i ] + offset
+
+
+def rotatexy_strip( strip, ang_rad ):
+    s_size = len( strip )
+    for i in range( 0, s_size ):
+        strip[ i ].rotateXY( ang_rad )
 
 
 ## =============================================================
