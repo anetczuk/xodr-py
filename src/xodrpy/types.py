@@ -618,8 +618,14 @@ class RoadSignal( BaseElement ):
         z_coord = float( self.attr("zOffset") )
         return self.road.position( s_coord, t_coord, z_coord )
 
+    def headingRaw(self):
+        return float( self.attr( "hOffset" ) )
+
     def heading(self):
-        return self.attr( "hOffset" )
+        obj_heading = self.headingRaw()
+        s_coord = float( self.attr("s") )
+        road_heading = self.road.heading( s_coord )
+        return obj_heading + road_heading
 
 
 ## ================================================================
