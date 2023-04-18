@@ -78,7 +78,7 @@ class RRMetadata( BaseElement ):
             signal_ids.add( sig_id )
         return signal_ids
 
-    def getSignalizationSignaUUIDs(self):
+    def getSignalizationSignalUUIDs(self):
         signalization = self[ "Signalization" ]
         junction_list = signalization[ "Junction" ]
         signal_ids = set()
@@ -102,6 +102,84 @@ class RRMetadata( BaseElement ):
             junc_id = junc["ID"]
             junction_ids.add( junc_id )
         return junction_ids
+
+    def getConfigurationDict(self):
+        ret_config = {}
+        configuration = self[ "SignalConfigurations" ]
+        signal_list = configuration[ "Signal" ]
+        for sig_cfg in signal_list:
+            sig_id   = sig_cfg[ "ID" ]
+            sig_type = sig_cfg[ "Type" ]
+            sig_data = ret_config.setdefault( sig_id, {} )
+            sig_cfg_list = sig_cfg[ "Configuration" ]
+            cfg_list = []
+            for sig_cfg in sig_cfg_list:
+                cfg_name = sig_cfg[ "Name" ]
+                cfg_list.append( cfg_name )
+            sig_data["type"] = sig_type
+            sig_data["cfg"]  = cfg_list
+        return ret_config
+
+    def getSerializationDict(self):
+        ret_config = {}
+        signalization = self[ "Signalization" ]
+        junction_list = signalization[ "Junction" ]
+        for junc in junction_list:
+            junc_id = junc["ID"]
+            intervals_list = ret_config.setdefault( junc_id, [] )
+            phase_list = junc[ "SignalPhase" ]
+            for phase in phase_list:
+                interval_list = phase[ "Interval" ]
+                for interval in interval_list:
+                    phase_duration = interval[ "Time" ]
+                    sigs_config = []
+                    signal_list = interval[ "Signal" ]
+                    for signal in signal_list:
+                        sig_id    = signal["ID"]
+                        asset_id  = signal["SignalAsset"]
+                        cfg_index = int( signal["ConfigurationIndex"] )
+                        sigs_config.append( { "uuid": sig_id,
+                                              "asset": asset_id,
+                                              "cfg_index": cfg_index } )
+                    intervals_list.append( { "duration": phase_duration,
+                                             "signals":  sigs_config } )
+        return ret_config
+    
+    def getPhasesDict(self, opendrive: 'OpenDRIVE' = None):
+        configuration_dict = self.getConfigurationDict()
+        serialization_dict = self.getSerializationDict()
+        ret_config = {}
+        for junc_uuid, junc_data_list in serialization_dict.items():
+            if not junc_data_list:
+                continue
+            phases_list = ret_config.setdefault( junc_uuid, [] )
+            for phase in junc_data_list:
+                data_signals = phase[ "signals" ]
+                signals_list = []
+                for data_signal in data_signals:
+                    asset_uuid  = data_signal["asset"]
+                    state_index = data_signal["cfg_index"]
+                    sig_cfg        = configuration_dict.get( asset_uuid, {} )
+                    sig_type       = sig_cfg.get( "type", "unknown" )
+                    sig_state_list = sig_cfg.get( "cfg", [] )
+                    sig_state      = "unknown"
+                    if state_index < len(sig_state_list):
+                        sig_state = sig_state_list[ state_index ]
+
+                    sig_uuid = data_signal["uuid"]
+
+                    sign_data_dict = { "uuid":  sig_uuid,
+                                       "type":  sig_type,
+                                       "state": sig_state }
+                    if opendrive:
+                        sig = opendrive.signalByUUID( sig_uuid )
+                        if sig:
+                            sign_data_dict['id'] = sig.id()
+
+                    signals_list.append( sign_data_dict )
+                phases_list.append( { "duration": phase[ "duration" ],
+                                      "signals":  signals_list } )
+        return ret_config
 
 
 ## ===========================================================

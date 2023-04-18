@@ -385,6 +385,8 @@ def get_by_path( data_dict, keys_list, default_value=None ):
 
 
 def convert_to_list( data_dict: dict, data_key ):
+    if not data_dict:
+        return { data_key: [] }
     ensure_list( data_dict, data_key )
     return data_dict
 

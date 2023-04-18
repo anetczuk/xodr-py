@@ -81,6 +81,9 @@ class OpenDRIVE( BaseElement ):
                 return road
         return None
 
+    def junctions(self) -> List[ 'Junction' ]:
+        return self.get("junction")
+
     def boundingBox(self, margin=None):
         min_pos = (None, None, None)
         max_pos = (None, None, None)
@@ -128,13 +131,7 @@ class OpenDRIVE( BaseElement ):
             ## sig_list.extend( signals.get( "signalReference", [] ) )
             
             for sig in sig_list:
-                user_data = sig.get( "userData", None )
-                if user_data is None:
-                    continue
-                signal_meta = user_data.get( "vectorSignal", None )
-                if signal_meta is None:
-                    continue
-                sig_uuid = signal_meta.get( "@signalId", None )
+                sig_uuid = sig.uuid()
                 if sig_uuid is None:
                     continue
                 signal_ids.add( sig_uuid )
@@ -180,7 +177,20 @@ class OpenDRIVE( BaseElement ):
                     return sig
 
             ## signalReference does not have own ID - attribute 'id' points to proper signal
+        return None
 
+    def signalByUUID(self, signal_uuid) -> 'RoadSignal':
+        road_list = self.roads()
+        for road in road_list:
+            ## pprint.pprint( road )
+            signals = road.get( "signals", None )
+            if signals is None:
+                continue
+            sig_list = signals.get( "signal", [] )
+            for sig in sig_list:
+                if sig.uuid() == signal_uuid:
+                    return sig
+            ## signalReference does not have own ID - attribute 'id' points to proper signal
         return None
 
     def objectIDList(self):
@@ -212,6 +222,11 @@ class OpenDRIVE( BaseElement ):
                 if obj_id == object_id:
                     return obj
         return None
+
+    ## ==============================================
+
+    def controllers(self) -> List[ 'SignalController' ]:
+        return self.get("controller")
 
 
 ## ================================================================
@@ -606,11 +621,24 @@ class RoadSignal( BaseElement ):
     def name(self):
         return self.attr("name")
 
+    def uuid(self):
+        """Return UUID of RR meta data."""
+        user_data = self.get( "userData", None )
+        if user_data is None:
+            return None
+        signal_meta = user_data.get( "vectorSignal", None )
+        if signal_meta is None:
+            return None
+        return signal_meta.get( "@signalId", None )
+
     def type(self):
         return self.attr("type")
 
     def subtype(self):
         return self.attr("subtype")
+
+    def zOffset(self):
+        return float( self.attr("zOffset") )
 
     def position(self):
         s_coord = float( self.attr("s") )
@@ -648,6 +676,9 @@ class RoadObject( BaseElement ):
 
     def offsetOnRoad(self):
         return self.attr("s")
+
+    def zOffset(self):
+        return float( self.attr("zOffset") )
 
     def position(self) -> Vector3D:
         s_coord = float( self.attr("s") )
@@ -695,3 +726,53 @@ class RoadObject( BaseElement ):
     ## returns "+" or "-"
     def orientation(self):
         return self.attr( "orientation" )
+
+
+## ================================================================
+
+
+class Junction( BaseElement ):
+
+    def id(self):
+        return self.attr("id")
+
+    def name(self):
+        return self.attr("name")
+
+    def uuid(self):
+        """Return UUID of RR meta data."""
+        user_data = self.get( "userData", None )
+        if user_data is None:
+            return None
+        junc_meta = user_data.get( "vectorJunction", None )
+        if junc_meta is None:
+            return None
+        return junc_meta.get( "@junctionId", None )
+
+    def controllersData(self):
+        controller_list = self.get("controller")
+        if not controller_list:
+            return []
+        ret = []
+        for item in controller_list:
+            ret.append( (item["@id"], item["@type"], item["@sequence"]) )
+        return ret
+
+
+## ================================================================
+
+
+class SignalController( BaseElement ):
+
+    def id(self):
+        return self.attr("id")
+
+    def name(self):
+        return self.attr("name")
+
+    def signalIDList(self):
+        ret = []
+        signals_list = self.get("control")
+        for item in signals_list:
+            ret.append( item["@signalId"] )
+        return ret
