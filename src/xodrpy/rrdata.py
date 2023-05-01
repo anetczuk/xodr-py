@@ -148,11 +148,15 @@ class RRMetadata( BaseElement ):
     def getPhasesDict(self, opendrive: 'OpenDRIVE' = None):
         configuration_dict = self.getConfigurationDict()
         serialization_dict = self.getSerializationDict()
-        ret_config = {}
+        junction_signals_dict = None
+        if opendrive:
+            junction_signals_dict = opendrive.junctionControllerSignals()
+        ret_config = []
         for junc_uuid, junc_data_list in serialization_dict.items():
             if not junc_data_list:
                 continue
-            phases_list = ret_config.setdefault( junc_uuid, [] )
+            phases_list = []
+            controller_signals = set()
             for phase in junc_data_list:
                 data_signals = phase[ "signals" ]
                 signals_list = []
@@ -169,16 +173,38 @@ class RRMetadata( BaseElement ):
                     sig_uuid = data_signal["uuid"]
 
                     sign_data_dict = { "uuid":  sig_uuid,
+                                       "id":    None,
                                        "type":  sig_type,
                                        "state": sig_state }
                     if opendrive:
                         sig = opendrive.signalByUUID( sig_uuid )
                         if sig:
                             sign_data_dict['id'] = sig.id()
+                            controller_signals.add( sig.id() )
 
                     signals_list.append( sign_data_dict )
                 phases_list.append( { "duration": phase[ "duration" ],
                                       "signals":  signals_list } )
+            
+            junc_id = None
+            if junction_signals_dict:
+                ## find matching junctions from XODR to junction in RRDATA
+                ## in XODR junction contains UUID in 'userData/vectorJunction' element, but surprisingly
+                ## it does not match UUID in 'Signalization/Junction/ID' element in RRDATA file
+                ## so the only way to match junction is to compare controlled signals IDs lists
+                junc_id = None
+                controller_signals = list( controller_signals )
+                controller_signals.sort()
+                for item_id, item_signals in junction_signals_dict.items():
+                    if item_signals == controller_signals:
+                        junc_id = item_id
+                        break
+
+            junction_dict = { "uuid":   junc_uuid,
+                              "id":     junc_id,
+                              "phases": phases_list
+                              }
+            ret_config.append( junction_dict )
         return ret_config
 
 

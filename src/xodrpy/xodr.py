@@ -61,6 +61,7 @@ def load( xodr_path ) -> OpenDRIVE:
         lookup.addClass( ["OpenDRIVE", "road", "planView", "geometry", "spiral"], ClothoidGeometry )
         lookup.addClass( ["OpenDRIVE", "road", "elevationProfile", "elevation"], Polynomial3 )
         lookup.addClass( ["OpenDRIVE", "road", "signals", "signal"], RoadSignal )
+        lookup.addClass( ["OpenDRIVE", "road", "signals", "signalReference"], RoadSignalReference )
         lookup.addClass( ["OpenDRIVE", "road", "objects", "object"], RoadObject )
         lookup.addConverter( ["OpenDRIVE", "road"], convert_to_Road )
         lookup.addClass( ["OpenDRIVE", "junction"], Junction )

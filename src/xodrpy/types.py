@@ -24,7 +24,7 @@
 
 import os
 import abc
-from typing import List
+from typing import List, Any, Dict
 
 import math
 import numpy as np
@@ -83,6 +83,24 @@ class OpenDRIVE( BaseElement ):
 
     def junctions(self) -> List[ 'Junction' ]:
         return self.get("junction")
+
+    def junctionControllerSignals(self) -> Dict[ Any, List ]:
+        ret_dict = {}
+        junc_list = self.junctions()
+        for junc in junc_list:
+            junc_signals = set()
+            junc_controllers_list = junc.controllersData()
+            for item in junc_controllers_list:
+                controller_id = item[0]
+                controller: SignalController = self.controllerById(controller_id)
+                if controller is None:
+                    continue
+                controller_signals = controller.signalIDList()
+                junc_signals.update( controller_signals )
+            junc_signals = list( junc_signals )
+            junc_signals.sort()
+            ret_dict[ junc.id() ] = junc_signals 
+        return ret_dict
 
     def boundingBox(self, margin=None):
         min_pos = (None, None, None)
@@ -193,6 +211,20 @@ class OpenDRIVE( BaseElement ):
             ## signalReference does not have own ID - attribute 'id' points to proper signal
         return None
 
+    def signalReferencesByUUID(self, signal_uuid) -> List[ 'RoadSignalReference' ]:
+        ret_list = []
+        road_list = self.roads()
+        for road in road_list:
+            ## pprint.pprint( road )
+            signals = road.get( "signals", None )
+            if signals is None:
+                continue
+            sig_list = signals.get( "signalReference", [] )
+            for sig in sig_list:
+                if sig.uuid() == signal_uuid:
+                    ret_list.append( sig )
+        return ret_list
+
     def objectIDList(self):
         road_list = self.roads()
         object_ids = set()
@@ -227,6 +259,13 @@ class OpenDRIVE( BaseElement ):
 
     def controllers(self) -> List[ 'SignalController' ]:
         return self.get("controller")
+
+    def controllerById(self, controller_id) -> 'SignalController':
+        controller_list = self.controllers()
+        for controller in controller_list:
+            if controller.id() == controller_id:
+                return controller
+        return None
 
 
 ## ================================================================
@@ -654,6 +693,35 @@ class RoadSignal( BaseElement ):
         s_coord = float( self.attr("s") )
         road_heading = self.road.heading( s_coord )
         return obj_heading + road_heading
+
+
+## ================================================================
+
+
+class RoadSignalReference( BaseElement ):
+
+    def __init__(self):
+        super().__init__()
+        self.road = None        ## road owning the signal
+
+    ## id of referenced signal
+    def id(self):
+        return self.attr("id")
+
+    def uuid(self):
+        """Return UUID of RR meta data."""
+        user_data = self.get( "userData", None )
+        if user_data is None:
+            return None
+        signal_meta = user_data.get( "vectorSignal", None )
+        if signal_meta is None:
+            return None
+        return signal_meta.get( "@signalId", None )
+
+    def position(self):
+        s_coord = float( self.attr("s") )
+        t_coord = float( self.attr("t") )
+        return self.road.position( s_coord, t_coord, 0.0 )
 
 
 ## ================================================================
