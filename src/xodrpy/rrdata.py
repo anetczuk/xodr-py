@@ -25,7 +25,7 @@
 import os
 import logging
 # import abc
-# from typing import List
+from typing import List, Dict, Any
 import pprint
 import xmltodict
 
@@ -145,19 +145,20 @@ class RRMetadata( BaseElement ):
                                              "signals":  sigs_config } )
         return ret_config
     
-    def getPhasesDict(self, opendrive: 'OpenDRIVE' = None):
+    def getPhasesDict(self, opendrive: 'OpenDRIVE' = None) -> List[ Dict[Any, Any] ]:
         configuration_dict = self.getConfigurationDict()
         serialization_dict = self.getSerializationDict()
+        junction_matches = {}
         junction_signals_dict = None
         if opendrive:
             junction_signals_dict = opendrive.junctionControllerSignals()
         ret_config = []
-        for junc_uuid, junc_data_list in serialization_dict.items():
-            if not junc_data_list:
+        for rr_junc_uuid, rr_junc_data_list in serialization_dict.items():
+            if not rr_junc_data_list:
                 continue
             phases_list = []
             controller_signals = set()
-            for phase in junc_data_list:
+            for phase in rr_junc_data_list:
                 data_signals = phase[ "signals" ]
                 signals_list = []
                 for data_signal in data_signals:
@@ -185,26 +186,56 @@ class RRMetadata( BaseElement ):
                     signals_list.append( sign_data_dict )
                 phases_list.append( { "duration": phase[ "duration" ],
                                       "signals":  signals_list } )
-            
-            junc_id = None
+
+            best_junc_id = None
             if junction_signals_dict:
                 ## find matching junctions from XODR to junction in RRDATA
                 ## in XODR junction contains UUID in 'userData/vectorJunction' element, but surprisingly
                 ## it does not match UUID in 'Signalization/Junction/ID' element in RRDATA file
                 ## so the only way to match junction is to compare controlled signals IDs lists
-                junc_id = None
-                controller_signals = list( controller_signals )
-                controller_signals.sort()
-                for item_id, item_signals in junction_signals_dict.items():
-                    if item_signals == controller_signals:
-                        junc_id = item_id
-                        break
 
-            junction_dict = { "uuid":   junc_uuid,
-                              "id":     junc_id,
+                for junc_id, junc_signals in junction_signals_dict.items():
+                    junk_signs_set  = set( junc_signals )
+                    signs_intersect = controller_signals.intersection( junk_signs_set )
+                    intersect_size  = len( signs_intersect )
+                    if intersect_size < 1:
+                        continue
+                    if intersect_size == len(controller_signals):
+                        best_junc_id = junc_id
+                        if rr_junc_uuid in junction_matches:
+                            del junction_matches[ rr_junc_uuid ]
+                        break
+                    junc_sub_matches = junction_matches.setdefault( rr_junc_uuid, {} )
+                    junc_sub_matches[ junc_id ] = intersect_size
+
+                # if best_junc_id is None:
+                #     _LOGGER.warning( "could not match XODR junction with junction from RRDATA" )
+                #     dict_string = pprint.pformat( junction_signals_dict, indent=2 )
+                #     _LOGGER.info( "XODR junctions signals:\n%s", dict_string )
+                #     _LOGGER.info( "RRDATA controller signals:\n%s", controller_signals )
+
+            junction_dict = { "uuid":   rr_junc_uuid,
+                              "id":     best_junc_id,
                               "phases": phases_list
                               }
             ret_config.append( junction_dict )
+        
+        ## find best matches
+        if junction_matches:
+            for rr_id in list( junction_matches ):
+                rr_matches   = junction_matches[ rr_id ]
+                best_junc    = max( rr_matches, key=rr_matches.get )
+                found_config = filter( lambda element: element["uuid"] == rr_id, ret_config )
+                found_config = list( found_config )
+                if found_config:
+                    found_config = found_config[0]
+                    found_config[ "id" ] = best_junc
+                    ## remove items
+                    del junction_matches[ rr_id ]
+                    for subdict in junction_matches.values():
+                        if best_junc in subdict:
+                            del subdict[ best_junc ]
+
         return ret_config
 
 
