@@ -111,6 +111,9 @@ def convert_to_Road( data_dict: dict ) -> Road:
     sigs_list = obj.signalsList()
     for item in sigs_list:
         item.road = obj
+    sigs_list = obj.signalReferencesList()
+    for item in sigs_list:
+        item.road = obj
 
     objects = obj.get( "objects", None )
     if objects:

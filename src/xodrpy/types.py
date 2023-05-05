@@ -85,6 +85,7 @@ class OpenDRIVE( BaseElement ):
         return self.get("junction")
 
     def junctionControllerSignals(self) -> Dict[ Any, List ]:
+        """Return dict mapping junction id to list of controlled signals"""
         ret_dict = {}
         junc_list = self.junctions()
         for junc in junc_list:
@@ -156,6 +157,27 @@ class OpenDRIVE( BaseElement ):
 
         return signal_ids
 
+    def signalGateList(self) -> List[ 'RoadSignalReference' ]:
+        road_list = self.roads()
+        signal_ids = list()
+        for road in road_list:
+            ## pprint.pprint( road )
+            signals = road.get( "signals", None )
+            if signals is None:
+                continue
+
+            sig_list = []
+            ## sig_list.extend( signals.get( "signal", [] ) )
+            sig_list.extend( signals.get( "signalReference", [] ) )
+
+            for sig in sig_list:
+                user_data   = sig.get( "userData", {} )
+                signal_meta = user_data.get( "vectorSignal", {} )
+                gate_id     = signal_meta.get("@gateId", None)
+                if gate_id:
+                    signal_ids.append( sig )
+        return signal_ids
+
     def signalGateUUIDList(self):
         road_list = self.roads()
         signal_ids = set()
@@ -170,15 +192,11 @@ class OpenDRIVE( BaseElement ):
             sig_list.extend( signals.get( "signalReference", [] ) )
 
             for sig in sig_list:
-                user_data = sig.get( "userData", None )
-                if user_data is None:
-                    continue
-                signal_meta = user_data.get( "vectorSignal", None )
-                if signal_meta is None:
-                    continue
-                sig_id = signal_meta[ "@gateId" ]
-                signal_ids.add( sig_id )
-
+                user_data   = sig.get( "userData", {} )
+                signal_meta = user_data.get( "vectorSignal", {} )
+                gate_id     = signal_meta.get("@gateId", None)
+                if gate_id:
+                    signal_ids.add( gate_id )
         return signal_ids
 
     def signalById(self, signal_id) -> 'RoadSignal':
@@ -210,6 +228,20 @@ class OpenDRIVE( BaseElement ):
                     return sig
             ## signalReference does not have own ID - attribute 'id' points to proper signal
         return None
+
+    def signalReferencesByID(self, signal_id) -> List[ 'RoadSignalReference' ]:
+        ret_list = []
+        road_list = self.roads()
+        for road in road_list:
+            ## pprint.pprint( road )
+            signals = road.get( "signals", None )
+            if signals is None:
+                continue
+            sig_list = signals.get( "signalReference", [] )
+            for sig in sig_list:
+                if sig.id() == signal_id:
+                    ret_list.append( sig )
+        return ret_list
 
     def signalReferencesByUUID(self, signal_uuid) -> List[ 'RoadSignalReference' ]:
         ret_list = []
@@ -610,11 +642,20 @@ class Road( BaseElement ):
         max_z   = max( start_z, end_z )
         return ( (min_pos[0], min_pos[1], min_z), (max_pos[0], max_pos[1], max_z) )
     
-    def signalsList(self):
+    def signalsList(self) -> List[ 'RoadSignal' ]:
         sigs_dict = self.get("signals")
         if not sigs_dict:
             return []
         sigs_list = sigs_dict.get("signal")
+        if not sigs_list:
+            return []
+        return sigs_list
+    
+    def signalReferencesList(self):
+        sigs_dict = self.get("signals")
+        if not sigs_dict:
+            return []
+        sigs_list = sigs_dict.get("signalReference")
         if not sigs_list:
             return []
         return sigs_list
@@ -670,6 +711,16 @@ class RoadSignal( BaseElement ):
             return None
         return signal_meta.get( "@signalId", None )
 
+    def gateUUID(self):
+        """Return gate UUID of RR meta data."""
+        user_data = self.get( "userData", None )
+        if user_data is None:
+            return None
+        signal_meta = user_data.get( "vectorSignal", None )
+        if signal_meta is None:
+            return None
+        return signal_meta.get( "@gateId", None )
+
     def type(self):
         return self.attr("type")
 
@@ -678,6 +729,12 @@ class RoadSignal( BaseElement ):
 
     def zOffset(self):
         return float( self.attr("zOffset") )
+
+    def coords(self):
+        s_coord = float( self.attr("s") )
+        t_coord = float( self.attr("t") )
+        z_coord = float( self.attr("zOffset") )
+        return { "s": s_coord, "t": t_coord, "z": z_coord }
 
     def position(self):
         s_coord = float( self.attr("s") )
@@ -693,6 +750,14 @@ class RoadSignal( BaseElement ):
         s_coord = float( self.attr("s") )
         road_heading = self.road.heading( s_coord )
         return obj_heading + road_heading
+    
+    def validity(self):
+        validity = self.get("validity", None)
+        if not validity:
+            return ()
+        fromLane = validity.get("@fromLane", None)
+        toLane   = validity.get("@toLane", None)
+        return (fromLane, toLane)
 
 
 ## ================================================================
@@ -718,10 +783,37 @@ class RoadSignalReference( BaseElement ):
             return None
         return signal_meta.get( "@signalId", None )
 
+    def gateUUID(self):
+        """Return gate UUID of RR meta data."""
+        user_data = self.get( "userData", None )
+        if user_data is None:
+            return None
+        signal_meta = user_data.get( "vectorSignal", None )
+        if signal_meta is None:
+            return None
+        return signal_meta.get( "@gateId", None )
+
+    def turnRelation(self):
+        user_data = self.get( "userData", None )
+        if user_data is None:
+            return None
+        signal_meta = user_data.get( "vectorSignal", None )
+        if signal_meta is None:
+            return None
+        return signal_meta.get( "@turnRelation", None )
+
     def position(self):
         s_coord = float( self.attr("s") )
         t_coord = float( self.attr("t") )
         return self.road.position( s_coord, t_coord, 0.0 )
+
+    def validity(self):
+        validity = self.get("validity", None)
+        if not validity:
+            return ()
+        fromLane = validity.get("@fromLane", None)
+        toLane   = validity.get("@toLane", None)
+        return (fromLane, toLane)
 
 
 ## ================================================================
