@@ -60,6 +60,8 @@ def load( xodr_path ) -> OpenDRIVE:
         lookup.addClass( ["OpenDRIVE", "road", "planView", "geometry", "arc"], ArcGeometry )
         lookup.addClass( ["OpenDRIVE", "road", "planView", "geometry", "spiral"], ClothoidGeometry )
         lookup.addClass( ["OpenDRIVE", "road", "elevationProfile", "elevation"], Polynomial3 )
+        lookup.addClass( ["lane", "width"], LaneWidth )
+        lookup.addConverter( ["OpenDRIVE", "road", "lanes", "laneSection"], convert_to_LaneSection )
         lookup.addClass( ["OpenDRIVE", "road", "signals", "signal"], RoadSignal )
         lookup.addClass( ["OpenDRIVE", "road", "signals", "signalReference"], RoadSignalReference )
         lookup.addClass( ["OpenDRIVE", "road", "objects", "object"], RoadObject )
@@ -102,6 +104,10 @@ def convert_to_Road( data_dict: dict ) -> Road:
     
     # _LOGGER.info( "converting Road %s %s", obj.id(), elevationProfile )
     ensure_list( elevationProfile, "elevation" )
+
+    lanes = obj.get( "lanes", None )
+    if lanes:
+        ensure_list( lanes, "laneSection" )
 
     signals = obj.get( "signals", None )
     if signals:
@@ -146,3 +152,41 @@ def convert_geometry( geom: dict ) -> GeometryBase:
         return spiral
 
     raise RuntimeError( f"unhandled geometry: {geom}" )
+
+
+def convert_to_LaneSection( data_dict: dict ) -> LaneSection:
+    obj = LaneSection()
+    obj.initialize( data_dict )
+
+    all_lanes = []
+
+    left_lanes = pop_lanes( obj, "left" )
+    all_lanes.extend( left_lanes )
+
+    left_lanes = pop_lanes( obj, "center" )
+    all_lanes.extend( left_lanes )
+
+    left_lanes = pop_lanes( obj, "right" )
+    all_lanes.extend( left_lanes )
+
+    lanes_list = []
+    for lane_dict in all_lanes:
+        lane = Lane()
+        lane.initialize( lane_dict )
+        ensure_list( lane, "width" )
+        lanes_list.append( lane )
+    obj[ "lanes" ] = lanes_list
+
+    return obj
+
+
+def pop_lanes( lanes_dict, lanes_key ):
+    lanes_list = lanes_dict.get( lanes_key, None )
+    if lanes_list is None:
+        return []
+    lanes_list = lanes_list.get( "lane", [] )
+    if isinstance( lanes_list, list ) is False:
+        lanes_list = [ lanes_list ]
+    if lanes_key in lanes_dict:
+        del lanes_dict[ lanes_key ]
+    return lanes_list

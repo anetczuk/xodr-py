@@ -24,6 +24,7 @@
 
 import os
 import abc
+import logging
 from typing import List, Any, Dict
 
 import math
@@ -36,6 +37,8 @@ from xodrpy.dicttoobject import convert,\
     DictLookup, BaseElement
 from xodrpy.OdrSpiral import OdrSpiral
 
+
+_LOGGER = logging.getLogger(__name__)
 
 SCRIPT_DIR = os.path.dirname( os.path.abspath(__file__) )
 
@@ -156,6 +159,28 @@ class OpenDRIVE( BaseElement ):
                 signal_ids.add( sig_uuid )
 
         return signal_ids
+
+    def signalList(self) -> List[ 'RoadSignal' ]:
+        ret_list  = list()
+        road_list = self.roads()
+        for road in road_list:
+            ## pprint.pprint( road )
+            signals = road.get( "signals", None )
+            if signals is None:
+                continue
+            ret_list.extend( signals.get( "signal", [] ) )
+        return ret_list
+
+    def signalReferenceList(self) -> List[ 'RoadSignalReference' ]:
+        ret_list  = list()
+        road_list = self.roads()
+        for road in road_list:
+            ## pprint.pprint( road )
+            signals = road.get( "signals", None )
+            if signals is None:
+                continue
+            ret_list.extend( signals.get( "signalReference", [] ) )
+        return ret_list
 
     def signalGateList(self) -> List[ 'RoadSignalReference' ]:
         road_list = self.roads()
@@ -605,6 +630,24 @@ class Road( BaseElement ):
             return 0.0
         return elevation.value( offset_on_road )
 
+    def laneSections(self) -> List[ 'LaneSection' ]:
+        lanes = self.get( "lanes" )
+        return lanes.get( "laneSection" )
+    
+    def laneSectionById(self, section_id):
+        sections = self.laneSections()
+        return next( (item for item in sections if item.id() == section_id), None )
+    
+    def laneSectionByOffset(self, offset_on_road) -> 'LaneSection':
+        sections = self.laneSections()
+        return get_item_by_offset( sections, offset_on_road )
+    
+    def laneById(self, section_id, lane_id):
+        section = self.laneSectionById( section_id )
+        if section is None:
+            return none
+        return section.laneById( lane_id )
+
     def position( self, s_coord, t_coord, z_coord ) -> Vector3D:
         geom = self.geometryByOffset( s_coord )
         if not geom:
@@ -612,6 +655,12 @@ class Road( BaseElement ):
         geom_pos: Vector2D = geom.positionByOffset( s_coord, t_coord )    
         elevation = self.elevationValue( s_coord ) + z_coord
         return Vector3D( geom_pos.x, geom_pos.y, elevation )
+
+    def position2d( self, s_coord, t_coord ) -> Vector2D:
+        geom = self.geometryByOffset( s_coord )
+        if not geom:
+            return None
+        return geom.positionByOffset( s_coord, t_coord )    
 
     def heading(self, s_coord):
         geom = self.geometryByOffset( s_coord )
@@ -659,7 +708,19 @@ class Road( BaseElement ):
         if not sigs_list:
             return []
         return sigs_list
-    
+
+    def signalById(self, signal_id) -> 'RoadSignal':
+        ## pprint.pprint( road )
+        signals = self.get( "signals", None )
+        if signals is None:
+            return None
+        sig_list = signals.get( "signal", [] )
+        for sig in sig_list:
+            sig_id = sig.get( "@id", None )
+            if sig_id == signal_id:
+                return sig
+        return None
+
     def objectsList(self):
         obj_dict = self.get("objects")
         if not obj_dict:
@@ -668,6 +729,125 @@ class Road( BaseElement ):
         if not obj_list:
             return []
         return obj_list
+
+
+## ================================================================
+
+
+##
+class LaneSection( BaseElement ):
+
+#     def __init__(self):
+#         super().__init__()
+
+    def id(self):
+        return self.attr("id")
+
+    def offset(self):
+        return float( self.attr("s") )
+
+    def laneById(self, lane_id) -> 'Lane':
+        lane_id = str( lane_id )
+        lanes = self.get( "lanes", [] )
+        return next( (item for item in lanes if item.id() == lane_id), None )
+
+    def laneIndexById(self, lane_id: int) -> int:
+        lane_id = str( lane_id )
+        lanes = self.get( "lanes", [] )
+        return next( (index for index, item in enumerate(lanes) if item.id() == lane_id), -1 )
+
+    def minMaxTOffset(self, lane_id: int, offset_on_road):
+        if lane_id == 0:
+            return (0.0, 0.0)
+        center_index = self.laneIndexById( 0 )
+        if center_index < 0:
+            return None
+        lane_index = self.laneIndexById( lane_id )
+        if lane_index < 0:
+            return None
+        offset_on_section = offset_on_road - self.offset()
+        lanes = self.get( "lanes", [] )
+        if lane_index < center_index:
+            ## positive side
+            min_offset = 0.0
+            for lane_index in range( lane_index + 1, center_index ):
+                curr_lane   = lanes[ lane_index ]
+                curr_width  = curr_lane.width( offset_on_section )
+                min_offset += curr_width
+            curr_lane  = lanes[ lane_index ]
+            curr_width = curr_lane.width( offset_on_section )
+            max_offset = min_offset + curr_width
+            return ( min_offset, max_offset )
+        else:
+            ## negative side
+            max_offset = 0.0
+            for lane_index in range( center_index + 1, lane_index ):
+                curr_lane   = lanes[ lane_index ]
+                curr_width  = curr_lane.width( offset_on_section )
+                max_offset -= curr_width
+            curr_lane  = lanes[ lane_index ]
+            curr_width = curr_lane.width( offset_on_section )
+            min_offset = max_offset - curr_width
+            return ( min_offset, max_offset )
+
+
+## ================================================================
+
+
+##
+class Lane( BaseElement ):
+
+#     def __init__(self):
+#         super().__init__()
+
+    def id(self):
+        return self.attr("id")
+
+    def widthList(self):
+        return self.get( "width", [] )
+
+    def width(self, offset_on_section):
+        width_list = self.widthList()
+        width_item: LaneWidth = get_item_by_offset( width_list, offset_on_section )
+        if width_item is None:
+            ## center lane
+            return 0.0
+        return width_item.width(offset_on_section)
+
+
+##
+class LaneWidth( BaseElement ):
+
+#     def __init__(self):
+#         super().__init__()
+
+    def startOffset(self):
+        return float( self.attr("sOffset") )
+
+    ## alias
+    def offset(self):
+        return self.startOffset()
+
+    def width(self, offset_on_section):
+        offset = offset_on_section - self.startOffset()
+        return self.widthRaw( offset )
+        
+    def widthRaw(self, offset):
+        width  = 0.0
+        param  = 1.0
+
+        width += float( self.attr("a") ) * param
+
+        param *= offset
+        width += float( self.attr("b") ) * param
+
+        param *= offset
+        width += float( self.attr("c") ) * param
+
+        param *= offset
+        width += float( self.attr("d") ) * param
+
+        return width
 
 
 ## return item from list by 'offset_value'
@@ -689,7 +869,7 @@ def get_item_by_offset( item_list, offset_value ):
 ## ================================================================
 
 
-class RoadSignal( BaseElement ):
+class RoadSignalBase( BaseElement ):
 
     def __init__(self):
         super().__init__()
@@ -697,9 +877,6 @@ class RoadSignal( BaseElement ):
 
     def id(self):
         return self.attr("id")
-
-    def name(self):
-        return self.attr("name")
 
     def uuid(self):
         """Return UUID of RR meta data."""
@@ -720,6 +897,33 @@ class RoadSignal( BaseElement ):
         if signal_meta is None:
             return None
         return signal_meta.get( "@gateId", None )
+
+    def position2d(self):
+        s_coord = float( self.attr("s") )
+        t_coord = float( self.attr("t") )
+        return self.road.position2d( s_coord, t_coord )
+
+    def validity(self):
+        validity = self.get("validity", None)
+        if not validity:
+            return None
+        fromLane = int( validity.get("@fromLane", None) )
+        toLane   = int( validity.get("@toLane", None) )
+        return (fromLane, toLane)
+    
+    ## returns "+" or "-"
+    def orientation(self):
+        return self.attr( "orientation" )
+
+
+##
+class RoadSignal( RoadSignalBase ):
+
+    def __init__(self):
+        super().__init__()
+
+    def name(self):
+        return self.attr("name")
 
     def type(self):
         return self.attr("type")
@@ -751,47 +955,12 @@ class RoadSignal( BaseElement ):
         road_heading = self.road.heading( s_coord )
         return obj_heading + road_heading
     
-    def validity(self):
-        validity = self.get("validity", None)
-        if not validity:
-            return ()
-        fromLane = validity.get("@fromLane", None)
-        toLane   = validity.get("@toLane", None)
-        return (fromLane, toLane)
 
-
-## ================================================================
-
-
-class RoadSignalReference( BaseElement ):
+##
+class RoadSignalReference( RoadSignalBase ):
 
     def __init__(self):
         super().__init__()
-        self.road = None        ## road owning the signal
-
-    ## id of referenced signal
-    def id(self):
-        return self.attr("id")
-
-    def uuid(self):
-        """Return UUID of RR meta data."""
-        user_data = self.get( "userData", None )
-        if user_data is None:
-            return None
-        signal_meta = user_data.get( "vectorSignal", None )
-        if signal_meta is None:
-            return None
-        return signal_meta.get( "@signalId", None )
-
-    def gateUUID(self):
-        """Return gate UUID of RR meta data."""
-        user_data = self.get( "userData", None )
-        if user_data is None:
-            return None
-        signal_meta = user_data.get( "vectorSignal", None )
-        if signal_meta is None:
-            return None
-        return signal_meta.get( "@gateId", None )
 
     def turnRelation(self):
         user_data = self.get( "userData", None )
@@ -802,18 +971,69 @@ class RoadSignalReference( BaseElement ):
             return None
         return signal_meta.get( "@turnRelation", None )
 
+    def coords(self):
+        s_coord = float( self.attr("s") )
+        t_coord = float( self.attr("t") )
+        return ( s_coord, t_coord )
+
     def position(self):
         s_coord = float( self.attr("s") )
         t_coord = float( self.attr("t") )
+        ## signal reference does not have Z coord
         return self.road.position( s_coord, t_coord, 0.0 )
 
-    def validity(self):
-        validity = self.get("validity", None)
-        if not validity:
-            return ()
-        fromLane = validity.get("@fromLane", None)
-        toLane   = validity.get("@toLane", None)
-        return (fromLane, toLane)
+    def heading(self):
+        s_coord = float( self.attr("s") )
+        road_heading = self.road.heading( s_coord )
+        orient = self.orientation()
+        if orient == "+":
+            road_heading += math.pi
+#         elif orient == "+":
+#             orient_angle -= math.pi * 0.5
+        return road_heading
+
+    def gateCoords(self):
+        """Coords of gate (specific to RoadRunner)."""
+        validity = self.validity()
+        if validity is None:
+            _LOGGER.warning( "no validity data found" )
+            return self.coords()
+
+        s_coord = float( self.attr("s") )
+        section: LaneSection = self.road.laneSectionByOffset( s_coord )
+        if section is None:
+            _LOGGER.warning( "no lane section found" )
+            return self.coords()
+
+        from_lane_id = validity[0]
+        to_lane_id   = validity[1]
+
+        if from_lane_id == to_lane_id:
+            ## one lane
+            lane_offsets = section.minMaxTOffset( from_lane_id, s_coord )
+            min_offset = lane_offsets[0]
+            max_offset = lane_offsets[1]
+            t_coord    = ( max_offset + min_offset ) * 0.5
+            return ( s_coord, t_coord )
+
+        # lanes span
+        from_offsets = section.minMaxTOffset( from_lane_id, s_coord )
+        if from_offsets is None:
+            return self.coords()
+
+        to_offsets   = section.minMaxTOffset( to_lane_id, s_coord )
+        if to_offsets is None:
+            return self.coords()
+
+        min_offset = min( from_offsets[0], to_offsets[0] )
+        max_offset = min( to_offsets[0], to_offsets[0] )
+        t_coord    = ( max_offset + min_offset ) * 0.5
+        return ( s_coord, t_coord )
+
+    def gatePosition2d(self):
+        """Position of gate (specific to RoadRunner)."""
+        coords = self.gateCoords()
+        return self.road.position2d( coords[0], coords[1] )
 
 
 ## ================================================================
